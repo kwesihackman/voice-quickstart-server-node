@@ -24,8 +24,19 @@ function tokenGenerator(request, response) {
     identity = request.query.identity;
   }
 
-  if(!identity) {
+  if (!identity) {
     identity = defaultIdentity;
+  }
+
+  var os = null;
+  if (request.method == 'POST') {
+    os = request.body.os;
+  } else {
+    os = request.query.os;
+  }
+
+  if (!os) {
+    os = 'ios';
   }
 
   // Used when generating any kind of tokens
@@ -34,15 +45,20 @@ function tokenGenerator(request, response) {
   const apiSecret = process.env.API_KEY_SECRET;
 
   // Used specifically for creating Voice tokens
-  const pushCredSid = process.env.PUSH_CREDENTIAL_SID;
+  var pushCredSid;
+  if (os === 'android') {
+    pushCredSid = process.env.ANDROID_PUSH_CREDENTIAL_SID;
+  } else {
+    pushCredSid = process.env.IOS_PUSH_CREDENTIAL_SID;
+  }
   const outgoingApplicationSid = process.env.APP_SID;
 
   // Create an access token which we will sign and return to the client,
   // containing the grant we just created
   const voiceGrant = new VoiceGrant({
-      outgoingApplicationSid: outgoingApplicationSid,
-      pushCredentialSid: pushCredSid
-    });
+    outgoingApplicationSid: outgoingApplicationSid,
+    pushCredentialSid: pushCredSid,
+  });
 
   // Create an access token which we will sign and return to the client,
   // containing the grant we just created
@@ -77,13 +93,26 @@ function makeCall(request, response) {
   const voiceResponse = new VoiceResponse();
 
   if (!to) {
-      voiceResponse.say("Congratulations! You have made your first call! Good bye.");
+    voiceResponse.say(
+      'Congratulations! You have made your first call! Good bye.'
+    );
   } else if (isNumber(to)) {
-      const dial = voiceResponse.dial({callerId : callerNumber});
-      dial.number(to);
+    const dial = voiceResponse.dial({ callerId: callerNumber });
+    dial.number(to);
   } else {
-      const dial = voiceResponse.dial({callerId : callerId});
-      dial.client(to);
+    var from = null;
+    if (request.method == 'POST') {
+      from = request.body.from;
+    } else {
+      from = request.query.from;
+    }
+
+    if (!from) {
+      from = callerId;
+    }
+
+    const dial = voiceResponse.dial({ callerId: from });
+    dial.client(to);
   }
   console.log('Response:' + voiceResponse.toString());
   return response.send(voiceResponse.toString());
@@ -111,31 +140,33 @@ async function placeCall(request, response) {
   const accountSid = process.env.ACCOUNT_SID;
   const apiKey = process.env.API_KEY;
   const apiSecret = process.env.API_KEY_SECRET;
-  const client = require('twilio')(apiKey, apiSecret, { accountSid: accountSid } );
+  const client = require('twilio')(apiKey, apiSecret, {
+    accountSid: accountSid,
+  });
 
   if (!to) {
-    console.log("Calling default client:" + defaultIdentity);
+    console.log('Calling default client:' + defaultIdentity);
     call = await client.api.calls.create({
       url: url,
       to: 'client:' + defaultIdentity,
       from: callerId,
     });
   } else if (isNumber(to)) {
-    console.log("Calling number:" + to);
+    console.log('Calling number:' + to);
     call = await client.api.calls.create({
       url: url,
       to: to,
       from: callerNumber,
     });
   } else {
-    console.log("Calling client:" + to);
-    call =  await client.api.calls.create({
+    console.log('Calling client:' + to);
+    call = await client.api.calls.create({
       url: url,
       to: 'client:' + to,
       from: callerId,
     });
   }
-  console.log(call.sid)
+  console.log(call.sid);
   //call.then(console.log(call.sid));
   return response.send(call.sid);
 }
@@ -145,37 +176,39 @@ async function placeCall(request, response) {
  */
 function incoming() {
   const voiceResponse = new VoiceResponse();
-  voiceResponse.say("Congratulations! You have received your first inbound call! Good bye.");
+  voiceResponse.say(
+    'Congratulations! You have received your first inbound call! Good bye.'
+  );
   console.log('Response:' + voiceResponse.toString());
   return voiceResponse.toString();
 }
 
 function welcome() {
   const voiceResponse = new VoiceResponse();
-  voiceResponse.say("Welcome to Twilio");
+  voiceResponse.say('Welcome to Twilio');
   console.log('Response:' + voiceResponse.toString());
   return voiceResponse.toString();
 }
 
 function isNumber(to) {
-  if(to.length == 1) {
-    if(!isNaN(to)) {
-      console.log("It is a 1 digit long number" + to);
+  if (to.length == 1) {
+    if (!isNaN(to)) {
+      console.log('It is a 1 digit long number' + to);
       return true;
     }
-  } else if(String(to).charAt(0) == '+') {
+  } else if (String(to).charAt(0) == '+') {
     number = to.substring(1);
-    if(!isNaN(number)) {
-      console.log("It is a number " + to);
+    if (!isNaN(number)) {
+      console.log('It is a number ' + to);
       return true;
-    };
+    }
   } else {
-    if(!isNaN(to)) {
-      console.log("It is a number " + to);
+    if (!isNaN(to)) {
+      console.log('It is a number ' + to);
       return true;
     }
   }
-  console.log("not a number");
+  console.log('not a number');
   return false;
 }
 
